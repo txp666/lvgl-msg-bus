@@ -64,7 +64,8 @@ esp_err_t MessageBus::Initialize(const BusConfig& config) {
 // ---------------------------------------------------------------------------
 
 SubscriptionId MessageBus::Subscribe(uint32_t topic, MessageCallback cb,
-                                     DeliveryMode mode) {
+                                     DeliveryMode mode,
+                                     uint32_t min_interval_ms) {
     if (!initialized_ || !cb) {
         ESP_LOGW(TAG, "Subscribe failed: bus %s, callback %s",
                  initialized_ ? "ok" : "not init", cb ? "ok" : "null");
@@ -82,12 +83,17 @@ SubscriptionId MessageBus::Subscribe(uint32_t topic, MessageCallback cb,
         next_id_ = 1;
     }
 
-    subscribers_.push_back({id, topic, std::move(cb), mode});
+    const uint32_t interval_ticks =
+        min_interval_ms > 0 ? pdMS_TO_TICKS(min_interval_ms) : 0;
+
+    subscribers_.push_back(
+        {id, topic, std::move(cb), mode, interval_ticks, 0});
 
     xSemaphoreGive(mutex_);
 
-    ESP_LOGD(TAG, "Subscribed id=%lu topic=0x%04lx mode=%d",
-             (unsigned long)id, (unsigned long)topic, static_cast<int>(mode));
+    ESP_LOGD(TAG, "Subscribed id=%lu topic=0x%04lx mode=%d interval=%lums",
+             (unsigned long)id, (unsigned long)topic,
+             static_cast<int>(mode), (unsigned long)min_interval_ms);
     return id;
 }
 
@@ -143,8 +149,16 @@ void MessageBus::Publish(uint32_t topic, const void* data, size_t size) {
     // typical subscriber counts.  If there are more, it will heap-allocate.
     std::vector<SubscriberEntry> matches;
     matches.reserve(4);
-    for (const auto& sub : subscribers_) {
+    for (auto& sub : subscribers_) {
         if (sub.topic == topic) {
+            // Per-subscriber throttle: skip if interval not yet elapsed.
+            if (sub.min_interval_ticks > 0) {
+                const uint32_t elapsed = now - sub.last_delivery_tick;
+                if (elapsed < sub.min_interval_ticks) {
+                    continue;
+                }
+            }
+            sub.last_delivery_tick = now;
             matches.push_back(sub);
         }
     }

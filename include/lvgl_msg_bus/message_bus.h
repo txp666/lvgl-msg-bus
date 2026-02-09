@@ -116,13 +116,19 @@ public:
 
     /**
      * @brief Register a callback for a topic.
-     * @param topic    Numeric topic identifier.
-     * @param cb       Callback to invoke when a message is published.
-     * @param mode     Delivery mode (default: dispatched to LVGL thread).
+     * @param topic            Numeric topic identifier.
+     * @param cb               Callback to invoke when a message is published.
+     * @param mode             Delivery mode (default: dispatched to LVGL thread).
+     * @param min_interval_ms  Minimum delivery interval in milliseconds.
+     *                         If > 0 the bus will skip deliveries that arrive
+     *                         sooner than the specified interval, effectively
+     *                         throttling the subscriber at the bus level.
+     *                         Default 0 = deliver every message (no throttle).
      * @return A unique SubscriptionId (never 0), or kInvalidSubscription on error.
      */
     SubscriptionId Subscribe(uint32_t topic, MessageCallback cb,
-                             DeliveryMode mode = DeliveryMode::LvglAsync);
+                             DeliveryMode mode = DeliveryMode::LvglAsync,
+                             uint32_t min_interval_ms = 0);
 
     /**
      * @brief Remove a subscription.
@@ -164,6 +170,8 @@ private:
         uint32_t        topic;
         MessageCallback callback;
         DeliveryMode    mode;
+        uint32_t        min_interval_ticks;   ///< 0 = deliver every message.
+        uint32_t        last_delivery_tick;    ///< Tick of last delivery.
     };
 
     /// Data block queued for lv_async_call().

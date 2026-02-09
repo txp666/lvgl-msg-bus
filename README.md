@@ -8,7 +8,8 @@ Designed for embedded systems where hardware tasks need to exchange data with a 
 
 | Feature | Description |
 |---------|-------------|
-| **Publish / Subscribe** | Topic-based message bus with `uint32_t` topic IDs for O(1) lookup. |
+| **Publish / Subscribe** | Topic-based message bus with `uint32_t` topic IDs. |
+| **Per-subscriber throttle** | `min_interval_ms` on `Subscribe()` — bus skips over-frequent deliveries automatically. |
 | **LVGL-thread dispatch** | `LvglAsync` delivery mode uses `lv_async_call()` — subscribers safely update widgets without manual locking. |
 | **Reactive DataStore** | Thread-safe key-value store that auto-publishes change notifications. |
 | **RAII Subscriptions** | `Subscription` and `SubscriptionGroup` automatically unsubscribe on destruction. |
@@ -18,24 +19,14 @@ Designed for embedded systems where hardware tasks need to exchange data with a 
 
 ### Installation
 
-**As a local component** (recommended during development):
-
-```
-your_project/
-├── components/
-│   └── lvgl-msg-bus/    ← clone or copy here
-├── main/
-│   └── ...
-└── CMakeLists.txt
-```
-
-**As a managed component** (after publishing):
+Add to your project's `main/idf_component.yml`:
 
 ```yaml
-# main/idf_component.yml
 dependencies:
-  txp666/lvgl-msg-bus: "^1.0.0"
+  txp666/lvgl-msg-bus: "^1.1.0"
 ```
+
+The IDF Component Manager will download and link the component automatically on `idf.py build`.
 
 ### Initialise
 
@@ -86,19 +77,33 @@ void adc_task(void*) {
 #include "msg_topics.h"
 
 class HomePage : public PageBase {
-    msgbus::Subscription sensor_sub_;
+    msgbus::SubscriptionGroup subs_;
 
-    void OnCreate(lv_obj_t* parent) override {
-        sensor_sub_ = msgbus::Subscription(
-            msgbus::MessageBus::GetInstance().Subscribe(
-                Topic::SensorData,
-                [this](const msgbus::Message& msg) {
-                    // Runs in LVGL thread — safe to update widgets.
-                    auto& r = msg.As<SensorReading>();
-                    lv_label_set_text_fmt(label_, "%.2f mA", r.current_ma);
-                }));
+    void OnEnter() override {
+        auto& bus = msgbus::MessageBus::GetInstance();
+
+        // Chart updates at ~100 ms (10 fps) — bus-level throttle
+        subs_.Add(bus.Subscribe(
+            Topic::SensorData,
+            [this](const msgbus::Message& msg) {
+                auto& r = msg.As<SensorReading>();
+                UpdateChart(r);
+            },
+            msgbus::DeliveryMode::LvglAsync, 100));
+
+        // Label updates at ~200 ms — bus-level throttle
+        subs_.Add(bus.Subscribe(
+            Topic::SensorData,
+            [this](const msgbus::Message& msg) {
+                auto& r = msg.As<SensorReading>();
+                lv_label_set_text_fmt(label_, "%.2f mA", r.current_ma);
+            },
+            msgbus::DeliveryMode::LvglAsync, 200));
     }
-    // sensor_sub_ auto-unsubscribes when the page is destroyed.
+
+    void OnLeave() override {
+        subs_.Clear();  // All subscriptions cancelled
+    }
 };
 ```
 
@@ -127,9 +132,9 @@ battery_watch_ = msgbus::Subscription(
 | Method | Description |
 |--------|-------------|
 | `Initialize(config)` | One-time init. Optional `BusConfig` to tune capacity. |
-| `Subscribe(topic, cb, mode)` | Register a callback. Returns `SubscriptionId`. |
+| `Subscribe(topic, cb, mode, min_interval_ms)` | Register a callback. `min_interval_ms` (default 0) enables bus-level throttle — deliveries arriving sooner than the interval are skipped. Returns `SubscriptionId`. |
 | `Unsubscribe(id)` | Remove a subscription. |
-| `Publish(topic, data, size)` | Send a message to all matching subscribers. |
+| `Publish(topic, data, size)` | Send a message to all matching subscribers (respects per-subscriber throttle). |
 | `Publish<T>(topic, value)` | Typed convenience wrapper. |
 
 ### DataStore

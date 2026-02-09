@@ -5,4 +5,4 @@ description: 'Thread-safe message bus and reactive data store for ESP-IDF + LVGL
 license: MIT
 repository: git://github.com/txp666/lvgl-msg-bus.git
 url: https://github.com/txp666/lvgl-msg-bus
-version: 1.0.0
+version: 1.1.0
