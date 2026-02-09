@@ -16,4 +16,5 @@ jobs:
         with:
           directories: '.'
           namespace: 'txp666'
+          name: 'lvgl-msg-bus'
           api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
