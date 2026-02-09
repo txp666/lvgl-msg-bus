@@ -16,4 +16,4 @@ jobs:
         with:
           directories: '.'
           namespace: 'txp666'
-          api_token: ${{ secrets.IDF_COMPONENT_REGISTRY_TOKEN }}
+          api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
