@@ -1,0 +1,15 @@
+build/
+dist/
+.vscode/
+.component_hash
+CHECKSUMS.json
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

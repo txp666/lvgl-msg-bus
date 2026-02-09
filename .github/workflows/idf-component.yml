@@ -1,0 +1,19 @@
+name: Push component to ESP Component Registry
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  upload_component:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload component to ESP Component Registry
+        uses: espressif/upload-components-ci-action@v1
+        with:
+          directories: '.'
+          namespace: 'txp666'
+          api_token: ${{ secrets.IDF_COMPONENT_REGISTRY_TOKEN }}
